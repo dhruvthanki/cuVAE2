@@ -2,6 +2,7 @@
 #include <curand_kernel.h>
 #include <cuda_runtime.h>
 #include <fstream>
+#include "mnist_loader.h"
 
 struct VAEParams {
     float *encoder_weights;
@@ -155,13 +156,6 @@ void checkCUDAError(const char *message) {
     }
 }
 
-void loadData(float* data, int size) {
-    // Dummy data for example purposes
-    for (int i = 0; i < size; i++) {
-        data[i] = static_cast<float>(rand()) / RAND_MAX;
-    }
-}
-
 void saveModel(const VAEParams& params, int hidden_dim, int input_dim, int latent_dim) {
     std::ofstream file("model.pth", std::ios::binary);
     if (!file.is_open()) {
@@ -232,25 +226,38 @@ bool loadModel(VAEParams& params, int hidden_dim, int input_dim, int latent_dim)
     return true;
 }
 
+void loadData(std::vector<std::vector<uint8_t>>& images, float* data, int data_size, int input_dim) {
+    for (int i = 0; i < data_size; ++i) {
+        for (int j = 0; j < input_dim; ++j) {
+            data[i * input_dim + j] = static_cast<float>(images[i][j]) / 255.0f;
+        }
+    }
+}
+
 int main() {
     VAEParams params;
     params.input_dim = 784; // Example input dimension for MNIST dataset
     params.hidden_dim = 400;
     params.latent_dim = 20;
-    int data_size = 100; // Number of samples
-    int size = params.input_dim;
+    int data_size = 60000; // Number of training samples in MNIST
     float learning_rate = 0.001;
     int epochs = 10; // Training epochs
 
-    float *h_data = (float*)malloc(data_size * size * sizeof(float));
-    loadData(h_data, data_size * size);
+    // Load MNIST data
+    std::vector<std::vector<uint8_t>> train_images = load_mnist_images("../data/MNIST/raw/train-images-idx3-ubyte");
+    std::vector<uint8_t> train_labels = load_mnist_labels("../data/MNIST/raw/train-labels-idx1-ubyte");
+    
+    // Allocate host memory for training data
+    float *h_data = (float*)malloc(data_size * params.input_dim * sizeof(float));
+    loadData(train_images, h_data, data_size, params.input_dim);
 
+    // Allocate device memory
     float *d_input, *d_output, *d_mean, *d_log_var, *d_z, *d_gradients, *d_loss;
     float h_loss = 0.0f;
 
-    cudaMalloc(&d_input, size * sizeof(float));
+    cudaMalloc(&d_input, params.input_dim * sizeof(float));
     checkCUDAError("CUDA malloc failed for d_input");
-    cudaMalloc(&d_output, size * sizeof(float));
+    cudaMalloc(&d_output, params.input_dim * sizeof(float));
     checkCUDAError("CUDA malloc failed for d_output");
     cudaMalloc(&d_mean, params.latent_dim * sizeof(float));
     checkCUDAError("CUDA malloc failed for d_mean");
@@ -258,7 +265,7 @@ int main() {
     checkCUDAError("CUDA malloc failed for d_log_var");
     cudaMalloc(&d_z, params.latent_dim * sizeof(float));
     checkCUDAError("CUDA malloc failed for d_z");
-    cudaMalloc(&d_gradients, size * sizeof(float));
+    cudaMalloc(&d_gradients, params.input_dim * sizeof(float));
     checkCUDAError("CUDA malloc failed for d_gradients");
     cudaMalloc(&d_loss, sizeof(float));
     checkCUDAError("CUDA malloc failed for d_loss");
@@ -303,7 +310,7 @@ int main() {
         h_loss = 0.0f;
 
         for (int i = 0; i < data_size; i++) {
-            cudaMemcpy(d_input, &h_data[i * size], size * sizeof(float), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_input, &h_data[i * params.input_dim], params.input_dim * sizeof(float), cudaMemcpyHostToDevice);
             checkCUDAError("CUDA memcpy failed for d_input");
 
             // Reset loss
@@ -311,17 +318,17 @@ int main() {
             checkCUDAError("CUDA memset failed for d_loss");
 
             // Launch the forward and backward pass kernels
-            forwardPass<<<1, size>>>(params, d_input, d_output, d_mean, d_log_var, d_z);
+            forwardPass<<<1, params.input_dim>>>(params, d_input, d_output, d_mean, d_log_var, d_z);
             checkCUDAError("Forward Pass Kernel Execution");
 
-            backwardPass<<<1, size>>>(params, d_input, d_output, d_mean, d_log_var, d_z, d_gradients);
+            backwardPass<<<1, params.input_dim>>>(params, d_input, d_output, d_mean, d_log_var, d_z, d_gradients);
             checkCUDAError("Backward Pass Kernel Execution");
 
-            updateWeights<<<1, size>>>(params, d_gradients, learning_rate);
+            updateWeights<<<1, params.input_dim>>>(params, d_gradients, learning_rate);
             checkCUDAError("Update Weights Kernel Execution");
 
             // Calculate loss
-            calculateLoss<<<1, size>>>(d_input, d_output, d_mean, d_log_var, d_loss, size);
+            calculateLoss<<<1, params.input_dim>>>(d_input, d_output, d_mean, d_log_var, d_loss, params.input_dim);
             checkCUDAError("Calculate Loss Kernel Execution");
 
             // Copy loss from device to host
@@ -336,18 +343,18 @@ int main() {
 
     // Testing loop
     for (int i = 0; i < data_size; i++) {
-        cudaMemcpy(d_input, &h_data[i * size], size * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_input, &h_data[i * params.input_dim], params.input_dim * sizeof(float), cudaMemcpyHostToDevice);
         checkCUDAError("CUDA memcpy failed for d_input");
 
         // Launch the forward pass kernel
-        forwardPass<<<1, size>>>(params, d_input, d_output, d_mean, d_log_var, d_z);
+        forwardPass<<<1, params.input_dim>>>(params, d_input, d_output, d_mean, d_log_var, d_z);
         checkCUDAError("Forward Pass Kernel Execution");
 
         // Calculate loss
         cudaMemset(d_loss, 0, sizeof(float));
         checkCUDAError("CUDA memset failed for d_loss");
 
-        calculateLoss<<<1, size>>>(d_input, d_output, d_mean, d_log_var, d_loss, size);
+        calculateLoss<<<1, params.input_dim>>>(d_input, d_output, d_mean, d_log_var, d_loss, params.input_dim);
         checkCUDAError("Calculate Loss Kernel Execution");
 
         // Copy loss from device to host
