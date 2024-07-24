@@ -4,6 +4,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 # Define the VAE model
 class VAE(nn.Module):
@@ -78,11 +79,38 @@ def test(model, test_loader):
 def save_model(model, path='vae_model.pth'):
     torch.save(model.state_dict(), path)
 
-# Main script
+# Function to load the model
+def load_model(path, input_dim, hidden_dim, latent_dim):
+    model = VAE(input_dim, hidden_dim, latent_dim)
+    model.load_state_dict(torch.load(path))
+    model.eval()
+    return model
+
+# Function to generate new samples from the VAE
+def generate_samples(model, num_samples, latent_dim):
+    with torch.no_grad():
+        z = torch.randn(num_samples, latent_dim)
+        samples = model.decode(z)
+        return samples
+
+# Function to plot generated samples
+def plot_samples(samples, num_samples, output_file='generated_samples.png'):
+    fig, axes = plt.subplots(1, num_samples, figsize=(num_samples, 1))
+    for i in range(num_samples):
+        axes[i].imshow(samples[i].view(28, 28).cpu().numpy(), cmap='gray')
+        axes[i].axis('off')
+    plt.savefig(output_file)
+    plt.close()
+
+# Main script to train, test, and save the model
 def main():
+    # Model parameters
     batch_size = 64
     epochs = 10
     learning_rate = 1e-3
+    input_dim = 784  # 28x28 images
+    hidden_dim = 400
+    latent_dim = 20
 
     # Load data
     transform = transforms.Compose([
@@ -95,9 +123,6 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize model, optimizer
-    input_dim = 784  # 28x28 images
-    hidden_dim = 400
-    latent_dim = 20
     model = VAE(input_dim, hidden_dim, latent_dim)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -108,6 +133,12 @@ def main():
 
     # Save the model in .pth format
     save_model(model, 'vae_model.pth')
+
+    # Generate new samples
+    samples = generate_samples(model, num_samples=10, latent_dim=latent_dim)
+
+    # Plot the generated samples
+    plot_samples(samples, num_samples=10)
 
 if __name__ == '__main__':
     main()

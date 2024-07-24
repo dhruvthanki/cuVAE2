@@ -2,3 +2,4 @@ build/
 .venv/
 data/
 *.pth
+*.png
