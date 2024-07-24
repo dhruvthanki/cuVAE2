@@ -47,6 +47,7 @@ def train(model, train_loader, optimizer, epoch, log_interval=100):
     train_loss = 0
     for batch_idx, (data, _) in enumerate(train_loader):
         data = data.view(-1, 784)
+        data = (data + 1) / 2  # Rescale data to [0, 1]
         optimizer.zero_grad()
         recon_batch, mean, log_var = model(data)
         loss = loss_function(recon_batch, data, mean, log_var)
@@ -66,6 +67,7 @@ def test(model, test_loader):
     with torch.no_grad():
         for data, _ in test_loader:
             data = data.view(-1, 784)
+            data = (data + 1) / 2  # Rescale data to [0, 1]
             recon, mean, log_var = model(data)
             test_loss += loss_function(recon, data, mean, log_var).item()
 
@@ -85,7 +87,7 @@ def main():
     # Load data
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))  # Normalizing to [0, 1]
+        transforms.Normalize((0.5,), (0.5,))  # Normalizing to [-1, 1]
     ])
     train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
