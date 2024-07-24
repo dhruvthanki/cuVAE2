@@ -26,6 +26,7 @@ __global__ void forwardPass(VAEParams params, float* input, float* output, float
     if (idx >= params.input_dim) return;
 
     // Encoder
+    // First Layer, Hidden Representation from Input
     for (int i = 0; i < params.hidden_dim; i++) {
         float sum = params.encoder_biases[i];
         for (int j = 0; j < params.input_dim; j++) {
@@ -34,6 +35,7 @@ __global__ void forwardPass(VAEParams params, float* input, float* output, float
         mean[i] = relu(sum);
     }
 
+    // Second Layer, Mean and Log Variance
     for (int i = 0; i < params.latent_dim; i++) {
         float sum_mean = params.encoder_biases[params.hidden_dim + i];
         float sum_log_var = params.encoder_biases[params.hidden_dim + params.latent_dim + i];
@@ -54,6 +56,7 @@ __global__ void forwardPass(VAEParams params, float* input, float* output, float
     }
 
     // Decoder
+    // First Layer, Hidden Representation from Latent Variables
     for (int i = 0; i < params.hidden_dim; i++) {
         float sum = params.decoder_biases[i];
         for (int j = 0; j < params.latent_dim; j++) {
@@ -62,6 +65,7 @@ __global__ void forwardPass(VAEParams params, float* input, float* output, float
         output[i] = relu(sum);
     }
 
+    // Second Layer, Reconstruction
     for (int i = 0; i < params.input_dim; i++) {
         float sum = params.decoder_biases[params.hidden_dim + i];
         for (int j = 0; j < params.hidden_dim; j++) {
