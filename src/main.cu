@@ -234,6 +234,28 @@ void loadData(std::vector<std::vector<uint8_t>>& images, float* data, int data_s
     }
 }
 
+// Function to print an MNIST image
+void print_mnist_image(const std::vector<uint8_t>& image, int rows, int cols) {
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            // Use different characters to represent pixel intensities
+            uint8_t pixel = image[i * cols + j];
+            if (pixel > 200) {
+                std::cout << "@@";
+            } else if (pixel > 150) {
+                std::cout << "##";
+            } else if (pixel > 100) {
+                std::cout << "++";
+            } else if (pixel > 50) {
+                std::cout << "..";
+            } else {
+                std::cout << "  ";
+            }
+        }
+        std::cout << std::endl;
+    }
+}
+
 int main() {
     VAEParams params;
     params.input_dim = 784; // Example input dimension for MNIST dataset
@@ -245,8 +267,12 @@ int main() {
 
     // Load MNIST data
     std::vector<std::vector<uint8_t>> train_images = load_mnist_images("../data/MNIST/raw/train-images-idx3-ubyte");
-    std::vector<uint8_t> train_labels = load_mnist_labels("../data/MNIST/raw/train-labels-idx1-ubyte");
+    // std::cout << "Shape: (" << train_images.size() << ", " << train_images[0].size() << ")" << std::endl;
+    // print_mnist_image(train_images[0], 28, 28);
     
+    // std::vector<uint8_t> train_labels = load_mnist_labels("../data/MNIST/raw/train-labels-idx1-ubyte");
+    // std::cout << "Label: " << static_cast<int>(train_labels[0]) << std::endl;
+
     // Allocate host memory for training data
     float *h_data = (float*)malloc(data_size * params.input_dim * sizeof(float));
     loadData(train_images, h_data, data_size, params.input_dim);
